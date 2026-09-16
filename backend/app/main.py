@@ -1,43 +1,130 @@
-from fastapi import FastAPI,UploadFile,File,Form,HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from datetime import datetime, timezone
 from pathlib import Path
-from datetime import datetime,timezone
-import shutil,uuid
-from .database import init_db,conn
-app=FastAPI(title='慧眼安巡',version='0.1.0')
-BASE=Path(__file__).resolve().parents[2]; FRONT=BASE/'frontend'; UP=BASE/'data/uploads/inspections'; UP.mkdir(parents=True,exist_ok=True)
+import shutil
+import uuid
+
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from .agents.perceive import perceive
+from .database import conn, init_db
+from .integrations.vision_client import VisionClient
+
+app = FastAPI(title="慧眼安巡", version="0.2.0")
+BASE = Path(__file__).resolve().parents[2]
+FRONT = BASE / "frontend"
+UPLOAD_DIR = BASE / "data" / "uploads" / "inspections"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 init_db()
-@app.on_event('startup')
-def startup(): init_db()
-app.mount('/assets',StaticFiles(directory=FRONT/'assets'),name='assets'); app.mount('/uploads',StaticFiles(directory=UP),name='uploads')
-@app.get('/')
-def index(): return FileResponse(FRONT/'index.html')
-@app.get('/records')
-def records_page(): return FileResponse(FRONT/'records.html')
-@app.get('/report')
-def report_page(): return FileResponse(FRONT/'report.html')
-@app.post('/api/inspections')
-async def create(scene:str=Form(...),image:UploadFile=File(...)):
- if scene not in ('dormitory','laboratory'): raise HTTPException(400,'不支持的场景')
- ext=Path(image.filename or '').suffix.lower() or '.jpg'; name=f'{uuid.uuid4().hex}{ext}'; path=UP/name
- with path.open('wb') as f: shutil.copyfileobj(image.file,f)
- now=datetime.now(timezone.utc).isoformat()
- with conn() as c:
-  iid=c.execute('INSERT INTO inspections(scene,image_path,status,created_at,completed_at) VALUES(?,?,?,?,?)',(scene,name,'completed',now,now)).lastrowid
-  c.execute('INSERT INTO hazards(inspection_id,name,location,evidence,risk,advice,regulation,source_url) VALUES(?,?,?,?,?,?,?,?)',(iid,'待人工确认的现场风险','照片中可见区域','演示模式已保存照片，尚未接入视觉模型，请结合现场复核。','提示','请由安全管理员现场确认后采取整改措施。','暂无已核验条款',''))
- return {'id':iid,'status':'completed'}
-@app.get('/api/inspections')
+
+
+@app.on_event("startup")
+def startup():
+    init_db()
+
+
+app.mount("/assets", StaticFiles(directory=FRONT / "assets"), name="assets")
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+
+@app.get("/")
+def index():
+    return FileResponse(FRONT / "index.html")
+
+
+@app.get("/records")
+def records_page():
+    return FileResponse(FRONT / "records.html")
+
+
+@app.get("/report")
+def report_page():
+    return FileResponse(FRONT / "report.html")
+
+
+@app.post("/api/inspections")
+async def create_inspection(scene: str = Form(...), image: UploadFile = File(...)):
+    if scene not in ("dormitory", "laboratory"):
+        raise HTTPException(400, "不支持的检查场景")
+
+    allowed = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+    if image.content_type not in allowed:
+        raise HTTPException(400, "只支持 JPEG、PNG 和 WebP 图片")
+
+    name = f"{uuid.uuid4().hex}{allowed[image.content_type]}"
+    image_path = UPLOAD_DIR / name
+    with image_path.open("wb") as output:
+        shutil.copyfileobj(image.file, output)
+
+    now = datetime.now(timezone.utc).isoformat()
+    client_enabled = VisionClient().enabled
+    with conn() as db:
+        inspection_id = db.execute(
+            "INSERT INTO inspections(scene,image_path,status,created_at) VALUES(?,?,?,?)",
+            (scene, name, "analyzing" if client_enabled else "completed", now),
+        ).lastrowid
+
+    if not client_enabled:
+        with conn() as db:
+            db.execute(
+                "INSERT INTO hazards(inspection_id,name,location,evidence,risk,advice,regulation,source_url) VALUES(?,?,?,?,?,?,?,?)",
+                (inspection_id, "待人工确认的现场风险", "照片中可见区域", "演示模式未配置完整的火山方舟 API Key 和推理接入点，请结合现场复核。", "提示", "配置火山视觉模型后重新上传照片，或由安全管理员现场确认。", "当前知识库未检索到适用条款", ""),
+            )
+            db.execute("UPDATE inspections SET completed_at=? WHERE id=?", (now, inspection_id))
+        return {"id": inspection_id, "status": "completed", "mode": "demo"}
+
+    try:
+        result = await perceive(BASE, image_path, scene)
+        hazards = result.get("hazards", [])
+        uncertain = result.get("uncertain_items", [])
+        with conn() as db:
+            for hazard in hazards:
+                confidence = hazard.get("confidence")
+                evidence = hazard.get("evidence") or "暂无证据说明"
+                if confidence is not None:
+                    evidence = f"{evidence}（模型置信度：{float(confidence):.0%}）"
+                db.execute(
+                    "INSERT INTO hazards(inspection_id,name,location,evidence,risk,advice,regulation,source_url) VALUES(?,?,?,?,?,?,?,?)",
+                    (inspection_id, hazard.get("name") or "未命名隐患", hazard.get("location") or "无法从当前照片确认", evidence, "待分级", "待接入整改建议模型", "待接入规章检索", ""),
+                )
+            if not hazards:
+                summary = "；".join(str(x) for x in uncertain) or "当前照片未发现明确隐患，但不代表整个场所绝对安全。"
+                db.execute(
+                    "INSERT INTO hazards(inspection_id,name,location,evidence,risk,advice,regulation,source_url) VALUES(?,?,?,?,?,?,?,?)",
+                    (inspection_id, "未发现明确隐患", "当前照片可见区域", summary, "未分级", "建议结合现场检查清单继续人工巡检。", "当前知识库未检索到适用条款", ""),
+                )
+            completed = datetime.now(timezone.utc).isoformat()
+            db.execute("UPDATE inspections SET status='completed',completed_at=?,error=NULL WHERE id=?", (completed, inspection_id))
+        return {"id": inspection_id, "status": "completed", "mode": "vision"}
+    except Exception as exc:
+        with conn() as db:
+            db.execute("UPDATE inspections SET status='failed',error=? WHERE id=?", (str(exc)[:1000], inspection_id))
+        raise HTTPException(502, f"视觉模型分析失败：{exc}") from exc
+
+
+@app.get("/api/inspections")
 def list_inspections():
- with conn() as c: return [dict(r) for r in c.execute('SELECT * FROM inspections ORDER BY id DESC')]
-@app.get('/api/inspections/{iid}')
-def get_inspection(iid:int):
- with conn() as c:
-  i=c.execute('SELECT * FROM inspections WHERE id=?',(iid,)).fetchone(); hs=c.execute('SELECT * FROM hazards WHERE inspection_id=?',(iid,)).fetchall()
- if not i: raise HTTPException(404,'记录不存在')
- d=dict(i); d['hazards']=[dict(h) for h in hs]; return d
-@app.get('/api/dashboard')
+    with conn() as db:
+        return [dict(row) for row in db.execute("SELECT * FROM inspections ORDER BY id DESC")]
+
+
+@app.get("/api/inspections/{inspection_id}")
+def get_inspection(inspection_id: int):
+    with conn() as db:
+        inspection = db.execute("SELECT * FROM inspections WHERE id=?", (inspection_id,)).fetchone()
+        hazards = db.execute("SELECT * FROM hazards WHERE inspection_id=?", (inspection_id,)).fetchall()
+    if not inspection:
+        raise HTTPException(404, "巡检记录不存在")
+    result = dict(inspection)
+    result["hazards"] = [dict(hazard) for hazard in hazards]
+    return result
+
+
+@app.get("/api/dashboard")
 def dashboard():
- with conn() as c:
-  total=c.execute('SELECT COUNT(*) n FROM inspections').fetchone()['n']; hazards=c.execute('SELECT COUNT(*) n FROM hazards').fetchone()['n']; risks=c.execute('SELECT risk,COUNT(*) n FROM hazards GROUP BY risk').fetchall()
- return {'total_inspections':total,'total_hazards':hazards,'risk_distribution':[dict(r) for r in risks]}
+    with conn() as db:
+        total = db.execute("SELECT COUNT(*) n FROM inspections").fetchone()["n"]
+        hazards = db.execute("SELECT COUNT(*) n FROM hazards").fetchone()["n"]
+        risks = db.execute("SELECT risk,COUNT(*) n FROM hazards GROUP BY risk").fetchall()
+    return {"total_inspections": total, "total_hazards": hazards, "risk_distribution": [dict(row) for row in risks]}

@@ -18,6 +18,22 @@ pip install -r requirements.txt
 uvicorn backend.app.main:app --reload
 ```
 
+要启用火山引擎方舟视觉分析，请先复制 `.env.example` 为 `.env`，填写方舟 API Key 和推理接入点 ID，再重启服务：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+在 `.env` 中至少填写：
+
+```env
+ARK_API_KEY=你的火山方舟API_Key
+ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+ARK_MODEL=ep-你的推理接入点ID
+```
+
+`ARK_MODEL` 填写方舟控制台中的推理接入点 ID，通常以 `ep-` 开头，并且该接入点必须使用支持图片输入的多模态模型。密钥只放在本机 `.env` 或服务器环境变量中，不要写进代码、网页或提交到 Git。缺少 API Key 或接入点 ID 时，系统会使用演示模式；两者配置完整后，新上传的照片才会调用火山视觉模型。
+
 打开 <http://127.0.0.1:8000/>，选择“学生宿舍”或“实验室”，上传一张现场照片。报告保存到 `data/app.db`，原始照片保存到 `data/uploads/inspections/`。
 
 页面地址：
@@ -103,7 +119,13 @@ backend/app/services/report_service.py
 
 ### 2. 接入真实视觉模型
 
-建议新增：
+当前项目已经提供了第一版视觉模型接入代码：
+
+- `backend/app/integrations/vision_client.py`：将本地图片转为 Base64，并通过火山方舟兼容接口调用视觉模型；
+- `backend/app/agents/perceive.py`：读取当前场景的 `checklist.json`，把检查清单交给视觉模型；
+- `backend/app/main.py`：上传后调用感知模块，并把结构化隐患写入 `hazards` 表。
+
+建议继续完善或替换为：
 
 ```text
 backend/app/integrations/vision_client.py
@@ -129,7 +151,27 @@ backend/app/schemas/hazard.py
 }
 ```
 
-照片不清晰或角度不足时，应明确返回“无法从当前照片确认”，不能强行生成确定结论。
+照片不清晰或角度不足时，应明确返回“无法从当前照片确认”，不能强行生成确定结论。当前视觉模型调用完成后，隐患的风险、整改建议和规章依据仍会显示为“待接入”，因为风险分级、RAG 和整改建议尚未实现。
+
+### 视觉模型调用的实际流程
+
+```text
+浏览器上传图片
+    ↓
+保存到 data/uploads/inspections/
+    ↓
+读取 knowledge/{scene}/checklist.json
+    ↓
+vision_client.py 将图片编码并请求模型
+    ↓
+模型返回 JSON：hazards、image_quality、uncertain_items
+    ↓
+写入 hazards 表
+    ↓
+报告页显示位置和证据
+```
+
+模型服务需要支持图片输入和 JSON 输出。如果你使用其他厂商，只需要重写 `VisionClient.analyze()`，保持返回结构不变；不要把供应商 SDK 代码直接写进路由。
 
 ### 3. 增加风险分级
 
@@ -240,9 +282,9 @@ backend/app/
 ```env
 DATABASE_URL=sqlite:///./data/app.db
 UPLOAD_DIR=./data/uploads/inspections
-VISION_PROVIDER=your_provider
-VISION_API_KEY=replace_me
-VISION_MODEL=replace_me
+ARK_API_KEY=replace_me
+ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+ARK_MODEL=ep-your-endpoint-id
 TEXT_PROVIDER=your_provider
 TEXT_API_KEY=replace_me
 TEXT_MODEL=replace_me
