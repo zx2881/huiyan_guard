@@ -1,6 +1,22 @@
 __pycache__/
 .env
+.env.*
+!.env.example
+.venv/
+venv/
 data/*.db
 data/chroma/
 data/uploads/
 data/logs/
+
+# Local competition materials and audit attachments are not published.
+赛事资料/
+华北五省赛事相关/
+交付物/
+核验附件/
+原始产品方案.docx
+*参赛立项说明*.docx
+*报名指南*.docx
+*答辩评价指标*.pdf
+*设计文档模板*.doc
+*计算机应用大赛*通知*.pdf
