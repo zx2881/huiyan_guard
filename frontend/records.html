@@ -1,1 +1,30 @@
-<!doctype html><meta charset="utf-8"><title>历史记录</title><link rel="stylesheet" href="/assets/css/common.css"><main><h1>历史巡检</h1><a href="/">新建巡检</a><div id="list"></div></main><script>fetch('/api/inspections').then(r=>r.json()).then(a=>list.innerHTML=a.map(x=>`<article><b>#${x.id} ${x.scene}</b><span>${new Date(x.created_at).toLocaleString()}</span> <a href="/report?id=${x.id}">查看报告</a></article>`).join('')||'<p>暂无记录</p>')</script>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>历史记录 | 慧眼安巡</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/css/common.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">巡</span>慧眼安巡</a>
+      <nav class="site-nav" aria-label="主导航"><a href="/">新建巡检</a><a href="/records" aria-current="page">历史记录</a></nav>
+    </div>
+  </header>
+  <main class="page-shell">
+    <div class="section-heading">
+      <div><p class="eyebrow">巡检档案</p><h1>历史记录</h1><p class="lede">查看分析状态、复核结果与可打印报告。</p></div>
+      <a class="button-link" href="/">新建巡检</a>
+    </div>
+    <div class="history-tools">
+      <label>搜索编号或摘要<input id="history-search" type="search" placeholder="例如：12 或 通道"></label>
+      <label>状态<select id="history-status"><option value="all">全部状态</option><option value="completed">已完成</option><option value="active">分析中</option><option value="failed">失败</option></select></label>
+    </div>
+    <div id="list" class="history-list" aria-live="polite">正在加载记录…</div>
+  </main>
+  <script src="/assets/js/records.js" defer></script>
+</body>
+</html>

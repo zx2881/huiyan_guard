@@ -1,1 +1,54 @@
-<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>慧眼安巡</title><link rel="stylesheet" href="/assets/css/common.css"><body><main><h1>慧眼安巡</h1><p>上传现场照片，生成校园安全巡检记录。</p><form id="f"><label>检查场景 <select name="scene"><option value="dormitory">学生宿舍</option><option value="laboratory">实验室</option></select></label><label>现场照片 <input name="image" type="file" accept="image/*" required></label><button>开始巡检</button></form><p id="msg"></p><nav><a href="/records">历史记录</a></nav></main><script>f.onsubmit=async e=>{e.preventDefault();msg.textContent='正在保存…';let r=await fetch('/api/inspections',{method:'POST',body:new FormData(f)});let d=await r.json();msg.textContent=r.ok?'完成，报告编号 '+d.id:'失败：'+(d.detail||'未知错误');if(r.ok)location='/report?id='+d.id}</script></body></html>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>新建巡检 | 慧眼安巡</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/css/common.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">巡</span>慧眼安巡</a>
+      <nav class="site-nav" aria-label="主导航"><a href="/" aria-current="page">新建巡检</a><a href="/records">历史记录</a></nav>
+    </div>
+  </header>
+  <main class="page-shell">
+    <div class="intro-grid">
+      <div>
+        <p class="eyebrow">现场照片巡检</p>
+        <h1>从一张照片开始安全检查</h1>
+        <p class="lede">系统识别照片中的可见风险，关联规章并生成待人工确认的整改建议。</p>
+        <form id="inspection-form" class="upload-panel">
+          <label>检查场景
+            <select name="scene">
+              <option value="dormitory">学生宿舍</option>
+              <option value="laboratory">实验室</option>
+            </select>
+          </label>
+          <label>现场照片
+            <input id="image-input" name="image" type="file" accept="image/jpeg,image/png,image/webp" required>
+          </label>
+          <section id="preview-panel" class="preview-panel" hidden>
+            <img id="image-preview" class="photo" alt="待上传照片预览">
+            <p id="image-info" class="muted small"></p>
+          </section>
+          <button id="submit-button" type="submit">开始巡检</button>
+          <p id="message" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+      <aside class="workflow-note" aria-label="使用说明">
+        <h2>检查流程</h2>
+        <ol>
+          <li>上传能看清风险位置的现场照片。</li>
+          <li>系统依次完成视觉识别、规章检索和风险分级。</li>
+          <li>在报告中确认、修正或补录结果。</li>
+        </ol>
+        <p class="small">识别结果仅覆盖照片可见范围，不能替代完整现场检查。</p>
+      </aside>
+    </div>
+  </main>
+  <script src="/assets/js/upload.js" defer></script>
+</body>
+</html>

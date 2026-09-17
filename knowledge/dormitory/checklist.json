@@ -1,1 +1,15 @@
-{"scene":"dormitory","items":[{"id":"socket_cover","name":"插线板是否被物品覆盖","instruction":"检查插线板周围及表面是否有衣物等覆盖物"},{"id":"blocked_exit","name":"通道是否堵塞","instruction":"检查门口、走廊和疏散通道是否有堆放物"}]}
+{
+  "scene": "dormitory",
+  "items": [
+    {"id": "socket_cover", "name": "插线板是否被物品覆盖", "instruction": "检查插线板周围及表面是否有衣物、纸张等可燃物覆盖"},
+    {"id": "blocked_exit", "name": "通道是否堵塞", "instruction": "检查门口、走廊和疏散通道是否有堆放物或障碍物"},
+    {"id": "unsafe_wiring", "name": "是否存在私拉乱接电线", "instruction": "检查电线、插排是否跨越通道、串接过多或存在明显私拉乱接"},
+    {"id": "high_power_appliance", "name": "是否违规使用大功率电器", "instruction": "检查是否可见电炉、热得快、电热棒等大功率发热电器"},
+    {"id": "open_flame", "name": "是否存在明火或吸烟痕迹", "instruction": "检查是否可见蜡烛、酒精炉、点燃蚊香、烟头或其他明火"},
+    {"id": "flammable_storage", "name": "是否违规存放易燃易爆物品", "instruction": "检查是否可见汽油、烟花爆竹、酒精炉燃料等危险物品"},
+    {"id": "fire_equipment_blocked", "name": "消防设施是否被遮挡或挪用", "instruction": "检查灭火器、消火栓和消防器材前方是否被物品遮挡或占用"},
+    {"id": "escape_obstacle", "name": "门窗阳台是否存在逃生障碍", "instruction": "检查门窗、阳台是否设置影响逃生和灭火救援的固定障碍物"},
+    {"id": "fire_door_open", "name": "常闭式防火门是否异常开启", "instruction": "检查标识为常闭式防火门的门体是否被物品顶住或保持开启"},
+    {"id": "ebike_battery_indoor", "name": "是否有电动自行车或电池入楼充电", "instruction": "检查宿舍、走道和楼梯间是否可见电动自行车、电池或飞线充电"}
+  ]
+}

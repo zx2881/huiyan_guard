@@ -1,4 +1,20 @@
-﻿<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>巡检报告</title><link rel="stylesheet" href="/assets/css/common.css"></head><body><main><a href="/records">← 历史记录</a><div id="report">加载中…</div></main><script>
-const root=document.getElementById('report'); const id=new URLSearchParams(location.search).get('id');
-if(!id) root.textContent='缺少报告编号'; else fetch('/api/inspections/'+encodeURIComponent(id)).then(r=>{if(!r.ok)throw Error('报告不存在');return r.json()}).then(x=>{const hazards=(x.hazards||[]).map(h=>`<section><h3>${h.name||'未命名隐患'}（${h.risk||'未分级'}）</h3><p><b>位置：</b>${h.location||'无法从当前照片确认'}</p><p><b>证据：</b>${h.evidence||'暂无证据说明'}</p><p><b>建议：</b>${h.advice||'暂无整改建议'}</p><p><b>依据：</b>${h.regulation||'当前知识库未检索到适用条款，请人工核验'}</p></section>`).join('');root.innerHTML=`<h1>巡检报告 #${x.id}</h1><p>场景：${x.scene}　状态：${x.status}</p><img class="photo" src="/uploads/${x.image_path}" alt="现场照片"><h2>分析结果</h2>${hazards||'<p>暂无分析结果</p>'}`}).catch(e=>root.textContent='加载失败：'+e.message);
-</script></body></html>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>巡检报告 | 慧眼安巡</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/css/common.css">
+</head>
+<body>
+  <header class="site-header no-print">
+    <div class="header-inner">
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">巡</span>慧眼安巡</a>
+      <nav class="site-nav" aria-label="主导航"><a href="/">新建巡检</a><a href="/records">历史记录</a></nav>
+    </div>
+  </header>
+  <main id="report" class="page-shell" aria-live="polite">加载中…</main>
+  <script src="/assets/js/report.js" defer></script>
+</body>
+</html>
