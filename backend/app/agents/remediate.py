@@ -25,6 +25,7 @@ async def remediate_hazard(
     assessment: RiskAssessment,
     regulations: list[dict],
     client: TextClient,
+    review_feedback: list[str] | None = None,
 ) -> Remediation:
     if not regulations:
         return Remediation(
@@ -39,6 +40,7 @@ async def remediate_hazard(
             (
                 "你是校园安全整改建议生成器。建议必须具体、可执行，不得编造法规期限。"
                 "suggested_deadline 只能表述项目建议时间，manual_checks 列出需现场核实内容。"
+                "如输入包含 review_feedback，只修正反馈指出的问题，不得编造现场情况。"
                 "只返回 advice、priority、suggested_deadline、manual_checks、method，method 必须为 model。"
             ),
             {
@@ -48,6 +50,7 @@ async def remediate_hazard(
                     {"id": item["id"], "content": item["content"]}
                     for item in regulations
                 ],
+                "review_feedback": review_feedback or [],
             },
         )
         try:

@@ -35,3 +35,5 @@ def test_history_and_report_use_safe_dom_and_print_styles():
     assert "innerHTML" not in history_script
     assert "@media print" in styles
     assert "window.print()" in report_script
+    assert "内部复核" in report_script
+    assert '"reviewing"' in report_script

@@ -50,7 +50,19 @@ def test_old_database_is_migrated_without_losing_records(tmp_path):
         }
         row = migrated.execute("SELECT * FROM inspections WHERE id=1").fetchone()
     assert {"image_quality", "uncertain_items", "summary"} <= columns
-    assert {"current_step", "progress", "started_at", "mode", "model_info", "retry_count"} <= columns
+    assert {
+        "current_step",
+        "progress",
+        "started_at",
+        "mode",
+        "model_info",
+        "retry_count",
+        "review_status",
+        "review_summary",
+        "review_findings",
+        "review_attempts",
+        "review_redo_count",
+    } <= columns
     assert row["image_path"] == "old.jpg"
     assert row["uncertain_items"] == "[]"
     assert {"document_number", "source_file", "verified_at", "keywords", "check_ids"} <= regulation_columns

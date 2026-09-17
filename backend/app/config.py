@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     text_base_url: str = "https://ark.cn-beijing.volces.com/api/v3"
     text_model: str = ""
     text_request_timeout_seconds: float = Field(default=30, gt=0)
+    enable_ai_review: bool = False
+    app_access_username: str = ""
+    app_access_password: str = ""
+    require_access_control: bool = False
+    write_rate_limit_per_minute: int = Field(default=30, ge=1, le=600)
 
     model_config = SettingsConfigDict(
         env_file=REPO_ROOT / ".env",
@@ -63,6 +68,8 @@ class Settings(BaseSettings):
         "text_api_key",
         "text_base_url",
         "text_model",
+        "app_access_username",
+        "app_access_password",
     )
     @classmethod
     def strip_text(cls, value: str) -> str:
@@ -76,6 +83,14 @@ class Settings(BaseSettings):
             raise ValueError("VISION_TOTAL_TIMEOUT_SECONDS 不得小于单次请求超时")
         return value
 
+    @model_validator(mode="after")
+    def validate_access_credentials(self):
+        if bool(self.app_access_username) != bool(self.app_access_password):
+            raise ValueError("APP_ACCESS_USERNAME 和 APP_ACCESS_PASSWORD 必须同时配置")
+        if self.require_access_control and not self.access_protected:
+            raise ValueError("生产启动要求配置 APP_ACCESS_USERNAME 和 APP_ACCESS_PASSWORD")
+        return self
+
     @property
     def database_path(self) -> Path:
         raw_path = self.database_url.removeprefix("sqlite:///")
@@ -86,6 +101,14 @@ class Settings(BaseSettings):
     def upload_path(self) -> Path:
         path = Path(self.upload_dir)
         return path.resolve() if path.is_absolute() else (REPO_ROOT / path).resolve()
+
+    @property
+    def access_protected(self) -> bool:
+        return bool(self.app_access_username and self.app_access_password)
+
+    @property
+    def ai_review_ready(self) -> bool:
+        return bool(self.enable_ai_review and self.text_api_key and self.text_model)
 
 
 @lru_cache

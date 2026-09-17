@@ -29,10 +29,10 @@
 成功，HTTP 200：
 
 ```json
-{"status":"ok","database":"ok","vision":"unconfigured","vision_provider":"ark","text":"rules"}
+{"status":"ok","database":"ok","vision":"unconfigured","vision_provider":"ark","text":"rules","ai_review":"disabled","access":"open"}
 ```
 
-`vision` 为 `configured` 或 `unconfigured`；`vision_provider` 为 `ark` 或 `yolo`。`text` 为 `configured` 或 `rules`，后者表示使用内置保守规则。当前 `yolo` 是预留适配器。健康状态只说明配置情况，不证明真实推理效果。数据库不可用时返回 HTTP 503：
+`vision` 为 `configured` 或 `unconfigured`；`vision_provider` 为 `ark` 或 `yolo`。`text` 为 `configured` 或 `rules`。`ai_review` 为 `disabled`、`configured` 或 `misconfigured`，最后一种表示已要求启用但缺文本模型配置。`access` 为 `open` 或 `protected`。当前 `yolo` 是预留适配器。健康状态只说明配置情况，不证明真实推理效果。数据库不可用时返回 HTTP 503：
 
 ```json
 {"status":"error","database":"unavailable"}
@@ -69,7 +69,7 @@
 | `id` | integer | 巡检编号 |
 | `scene` | string | 场景 |
 | `image_path` | string | 上传目录内的文件名 |
-| `status` | string | `queued`、`perceiving`、`retrieving`、`classifying`、`remediating`、`completed` 或 `failed` |
+| `status` | string | `queued`、`perceiving`、`retrieving`、`classifying`、`remediating`、`reviewing`、`completed` 或 `failed` |
 | `current_step` | string | 当前执行步骤 |
 | `progress` | integer | 0–100 的阶段进度，不代表模型内部百分比 |
 | `created_at` | string | 创建时间 |
@@ -81,6 +81,11 @@
 | `mode` | string | `vision`、`demo` 或旧记录 `unknown` |
 | `model_info` | object/null | 视觉提供方与文本处理模式，不包含密钥 |
 | `retry_count` | integer | 已发起重试次数 |
+| `review_status` | string | `disabled`、`not_required`、`passed`、`revised_passed`、`manual_required` 或 `error_manual_required` |
+| `review_summary` | string/null | 内部复核总结，不代表现场整改完成 |
+| `review_findings` | array | 问题所属轮次、隐患序号、检查区域和说明 |
+| `review_attempts` | integer | 最多 2 次复核 |
+| `review_redo_count` | integer | 自动重做次数，最大为 1 |
 
 ### GET /api/inspections/{id}
 
@@ -116,9 +121,15 @@
 
 统计计算未被人工标记为 `rejected` 的隐患；演示模式、无隐患记录和误报不会增加隐患数。历史数据库若已有旧占位记录，本次迁移不会破坏性删除。
 
+## 访问保护与限流
+
+设置 `APP_ACCESS_USERNAME` 和 `APP_ACCESS_PASSWORD` 后，除 `/api/health` 外的页面、接口、静态文件和上传图片均要求 HTTP Basic Auth。缺少或错误凭据返回 401。公网必须由 HTTPS 反向代理保护，否则 Basic Auth 凭据会以可还原形式经过网络。
+
+所有 `POST`、`PUT`、`PATCH`、`DELETE` API 共享单进程滑动窗口限流。超过 `WRITE_RATE_LIMIT_PER_MINUTE` 返回 HTTP 429、`Retry-After` 和安全错误消息。该机制用于阻止重复提交和简单滥用，不是多实例网关限流。
+
 ## 当前数据表
 
-- `inspections`：在原字段外保存 `current_step`、`progress`、`started_at`、`mode`、`model_info`、`retry_count`。
+- `inspections`：在原字段外保存执行进度、模型信息、重试次数，以及内部复核状态、总结、问题、次数和重做次数。
 - `hazards`：在基础证据、等级和建议外保存置信度、分级理由、优先级、建议时间、人工核验项、生成方法、来源、人工状态、AI 原始值和更新时间。
 - `hazard_actions`：保存确认、修正、误报和人工补录的前后值、说明、未认证操作者标记与时间。
 - `regulation_snapshots`：保存当次条款 ID、文件信息、原文、URL 和检索时间，知识库更新不改变旧报告。
@@ -126,4 +137,4 @@
 
 SQLite 路径由 `DATABASE_URL` 控制，上传路径由 `UPLOAD_DIR` 控制。相对路径均以仓库根目录为基准。
 
-当前执行状态为 `queued → perceiving → retrieving → classifying → remediating → completed`，任一步骤可转为 `failed`。`reviewing` 仍是后续可选的 AI 内部复核步骤。
+当前执行状态为 `queued → perceiving → retrieving → classifying → remediating → reviewing（启用时）→ completed`，任一步骤可转为 `failed`。内部复核只允许一次自动重做；第二次仍不通过或复核服务异常时，保留报告并转人工复核。

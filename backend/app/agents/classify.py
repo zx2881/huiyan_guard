@@ -26,6 +26,7 @@ async def classify_hazard(
     hazard: VisualHazard,
     regulations: list[dict],
     client: TextClient,
+    review_feedback: list[str] | None = None,
 ) -> RiskAssessment:
     allowed_ids = {item["id"] for item in regulations}
     if not regulations:
@@ -40,6 +41,7 @@ async def classify_hazard(
             (
                 "你是校园安全报告分级器。只能使用输入中的照片证据和法规记录。"
                 "风险等级是项目内部等级，不是法规处罚等级。无充分依据时使用 needs_review。"
+                "如输入包含 review_feedback，只修正反馈指出的问题，不得扩展照片事实。"
                 "只返回 risk、reason、regulation_ids、method，其中 method 必须为 model。"
             ),
             {
@@ -52,6 +54,7 @@ async def classify_hazard(
                     }
                     for item in regulations
                 ],
+                "review_feedback": review_feedback or [],
             },
         )
         try:

@@ -40,7 +40,12 @@ def init_db(settings: Settings | None = None) -> None:
                 started_at TEXT,
                 mode TEXT NOT NULL DEFAULT 'unknown',
                 model_info TEXT,
-                retry_count INTEGER NOT NULL DEFAULT 0
+                retry_count INTEGER NOT NULL DEFAULT 0,
+                review_status TEXT NOT NULL DEFAULT 'disabled',
+                review_summary TEXT,
+                review_findings TEXT NOT NULL DEFAULT '[]',
+                review_attempts INTEGER NOT NULL DEFAULT 0,
+                review_redo_count INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS hazards(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -132,6 +137,25 @@ def init_db(settings: Settings | None = None) -> None:
             "model_info": "ALTER TABLE inspections ADD COLUMN model_info TEXT",
             "retry_count": (
                 "ALTER TABLE inspections ADD COLUMN retry_count "
+                "INTEGER NOT NULL DEFAULT 0"
+            ),
+            "review_status": (
+                "ALTER TABLE inspections ADD COLUMN review_status "
+                "TEXT NOT NULL DEFAULT 'disabled'"
+            ),
+            "review_summary": (
+                "ALTER TABLE inspections ADD COLUMN review_summary TEXT"
+            ),
+            "review_findings": (
+                "ALTER TABLE inspections ADD COLUMN review_findings "
+                "TEXT NOT NULL DEFAULT '[]'"
+            ),
+            "review_attempts": (
+                "ALTER TABLE inspections ADD COLUMN review_attempts "
+                "INTEGER NOT NULL DEFAULT 0"
+            ),
+            "review_redo_count": (
+                "ALTER TABLE inspections ADD COLUMN review_redo_count "
                 "INTEGER NOT NULL DEFAULT 0"
             ),
         }

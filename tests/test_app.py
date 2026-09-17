@@ -18,6 +18,8 @@ def test_health_reports_database_and_unconfigured_vision(client):
         "vision": "unconfigured",
         "vision_provider": "ark",
         "text": "rules",
+        "ai_review": "disabled",
+        "access": "open",
     }
 
 

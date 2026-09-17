@@ -42,3 +42,30 @@ def test_rejects_unsupported_database_url(database_url: str):
 def test_rejects_unknown_vision_provider():
     with pytest.raises(ValidationError):
         Settings(_env_file=None, vision_provider="unknown")
+
+
+def test_access_credentials_must_be_configured_as_a_pair():
+    with pytest.raises(ValidationError, match="必须同时配置"):
+        Settings(_env_file=None, app_access_username="reviewer")
+
+    settings = Settings(
+        _env_file=None,
+        app_access_username=" reviewer ",
+        app_access_password=" secret ",
+    )
+    assert settings.access_protected is True
+    assert settings.app_access_username == "reviewer"
+    assert settings.app_access_password == "secret"
+
+    with pytest.raises(ValidationError, match="生产启动要求"):
+        Settings(_env_file=None, require_access_control=True)
+
+
+def test_ai_review_requires_text_configuration_to_be_ready():
+    assert Settings(_env_file=None, enable_ai_review=True).ai_review_ready is False
+    assert Settings(
+        _env_file=None,
+        enable_ai_review=True,
+        text_api_key="secret",
+        text_model="review-model",
+    ).ai_review_ready is True

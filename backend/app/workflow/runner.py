@@ -6,6 +6,7 @@ from ..agents.classify import classify_hazard
 from ..agents.checks import infer_check_id
 from ..agents.perceive import perceive
 from ..agents.remediate import remediate_hazard
+from ..agents.review import review_report
 from ..config import REPO_ROOT, Settings
 from ..database import conn
 from ..integrations.text_client import TextClient, TextServiceError
@@ -20,6 +21,7 @@ STEPS = {
     "retrieving": 45,
     "classifying": 65,
     "remediating": 80,
+    "reviewing": 90,
     "completed": 100,
     "failed": 100,
 }
@@ -115,6 +117,29 @@ async def run_inspection_workflow(
             )
         ]
 
+        review_status = "disabled"
+        review_summary = None
+        review_findings: list[dict] = []
+        review_attempts = 0
+        review_redo_count = 0
+        if settings.enable_ai_review:
+            update_step(settings, inspection_id, "reviewing")
+            (
+                assessments,
+                remediations,
+                review_status,
+                review_summary,
+                review_findings,
+                review_attempts,
+                review_redo_count,
+            ) = await _run_internal_review(
+                visual.hazards,
+                assessments,
+                remediations,
+                regulations_by_hazard,
+                text_client,
+            )
+
         completed_at = datetime.now(timezone.utc).isoformat()
         with conn(settings) as database:
             for hazard, regulations, assessment, remediation in zip(
@@ -197,16 +222,24 @@ async def run_inspection_workflow(
             database.execute(
                 """UPDATE inspections SET
                     status='completed',current_step='completed',progress=100,
-                    completed_at=?,error=NULL,model_info=? WHERE id=?""",
+                    completed_at=?,error=NULL,model_info=?,review_status=?,
+                    review_summary=?,review_findings=?,review_attempts=?,
+                    review_redo_count=? WHERE id=?""",
                 (
                     completed_at,
                     json.dumps(
                         {
                             "vision_provider": vision.provider_name,
                             "text_mode": "model" if text_client.enabled else "rules",
+                            "ai_review": review_status,
                         },
                         ensure_ascii=False,
                     ),
+                    review_status,
+                    review_summary,
+                    json.dumps(review_findings, ensure_ascii=False),
+                    review_attempts,
+                    review_redo_count,
                     inspection_id,
                 ),
             )
@@ -221,8 +254,144 @@ async def run_inspection_workflow(
         )
 
 
+async def _run_internal_review(
+    hazards,
+    assessments,
+    remediations,
+    regulations_by_hazard,
+    text_client,
+):
+    if not hazards:
+        return (
+            assessments,
+            remediations,
+            "not_required",
+            "本次没有明确隐患，无需执行内部报告复核。",
+            [],
+            0,
+            0,
+        )
+    if not text_client.enabled:
+        return (
+            assessments,
+            remediations,
+            "manual_required",
+            "内部复核已启用，但文本模型未配置，报告已转人工复核。",
+            [],
+            0,
+            0,
+        )
+    findings: list[dict] = []
+    attempts = 1
+    redo_count = 0
+    try:
+        first = await review_report(
+            hazards,
+            assessments,
+            remediations,
+            regulations_by_hazard,
+            text_client,
+        )
+        findings.extend(
+            {"attempt": 1, **finding.model_dump()} for finding in first.findings
+        )
+        if first.verdict == "pass":
+            return assessments, remediations, "passed", first.summary, findings, 1, 0
+        if first.verdict == "manual_review":
+            return (
+                assessments,
+                remediations,
+                "manual_required",
+                first.summary,
+                findings,
+                1,
+                0,
+            )
+
+        feedback_by_hazard = [[] for _ in hazards]
+        for finding in first.findings:
+            feedback_by_hazard[finding.hazard_index].append(finding.message)
+        redo_count = 1
+        revised_assessments = [
+            await classify_hazard(
+                hazard,
+                regulations,
+                text_client,
+                review_feedback=feedback_by_hazard[index],
+            )
+            for index, (hazard, regulations) in enumerate(
+                zip(hazards, regulations_by_hazard, strict=True)
+            )
+        ]
+        revised_remediations = [
+            await remediate_hazard(
+                hazard,
+                assessment,
+                regulations,
+                text_client,
+                review_feedback=feedback_by_hazard[index],
+            )
+            for index, (hazard, assessment, regulations) in enumerate(
+                zip(
+                    hazards,
+                    revised_assessments,
+                    regulations_by_hazard,
+                    strict=True,
+                )
+            )
+        ]
+        attempts = 2
+        second = await review_report(
+            hazards,
+            revised_assessments,
+            revised_remediations,
+            regulations_by_hazard,
+            text_client,
+        )
+        findings.extend(
+            {"attempt": 2, **finding.model_dump()} for finding in second.findings
+        )
+        if second.verdict == "pass":
+            return (
+                revised_assessments,
+                revised_remediations,
+                "revised_passed",
+                second.summary,
+                findings,
+                2,
+                1,
+            )
+        return (
+            revised_assessments,
+            revised_remediations,
+            "manual_required",
+            second.summary,
+            findings,
+            2,
+            1,
+        )
+    except TextServiceError:
+        return (
+            assessments,
+            remediations,
+            "error_manual_required",
+            "内部复核未能完成，报告已保留并转人工复核。",
+            findings,
+            attempts,
+            redo_count,
+        )
+
+
 def mark_interrupted_workflows(settings: Settings) -> int:
-    active = ("queued", "analyzing", "perceiving", "retrieving", "classifying", "remediating")
+    active = (
+        "queued",
+        "analyzing",
+        "perceiving",
+        "retrieving",
+        "classifying",
+        "remediating",
+        "reviewing",
+    )
     placeholders = ",".join("?" for _ in active)
     with conn(settings) as database:
         cursor = database.execute(

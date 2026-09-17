@@ -12,6 +12,7 @@ from .database import conn, init_db
 from .integrations.text_client import TextClient
 from .integrations.vision_factory import build_vision_analyzer
 from .knowledge.importer import import_regulations
+from .reliability import WriteRateLimiter, basic_auth_valid
 from .schemas.human_review import HazardUpdate, ManualHazardCreate
 from .utils.images import validate_and_save_image
 from .workflow.runner import mark_interrupted_workflows, run_inspection_workflow
@@ -66,6 +67,14 @@ def health(request: Request):
         ),
         "vision_provider": settings.vision_provider,
         "text": "configured" if TextClient(settings).enabled else "rules",
+        "ai_review": (
+            "configured"
+            if settings.ai_review_ready
+            else "misconfigured"
+            if settings.enable_ai_review
+            else "disabled"
+        ),
+        "access": "protected" if settings.access_protected else "open",
     }
 
 
@@ -150,7 +159,9 @@ async def retry_inspection(request: Request, inspection_id: int):
         database.execute(
             """UPDATE inspections SET
                 status='queued',current_step='queued',progress=0,error=NULL,
-                completed_at=NULL,started_at=?,retry_count=retry_count+1
+                completed_at=NULL,started_at=?,retry_count=retry_count+1,
+                review_status='disabled',review_summary=NULL,
+                review_findings='[]',review_attempts=0,review_redo_count=0
                 WHERE id=?""",
             (now, inspection_id),
         )
@@ -340,6 +351,7 @@ def create_manual_hazard(
 def _inspection_dict(row) -> dict:
     result = dict(row)
     result["uncertain_items"] = _json_list(result.get("uncertain_items"))
+    result["review_findings"] = _json_list(result.get("review_findings"))
     try:
         model_info = json.loads(result.get("model_info") or "null")
         result["model_info"] = model_info if isinstance(model_info, dict) else None
@@ -432,9 +444,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
-    application = FastAPI(title="慧眼安巡", version="0.6.0", lifespan=lifespan)
+    application = FastAPI(title="慧眼安巡", version="0.7.0", lifespan=lifespan)
     application.state.settings = resolved_settings
     application.state.frontend_dir = FRONTEND_DIR
+    application.state.write_rate_limiter = WriteRateLimiter(
+        resolved_settings.write_rate_limit_per_minute
+    )
+
+    @application.middleware("http")
+    async def protect_and_limit(request: Request, call_next):
+        settings_for_request = _settings(request)
+        if request.url.path != "/api/health" and not basic_auth_valid(
+            request.headers.get("Authorization"), settings_for_request
+        ):
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "需要访问凭据"},
+                headers={"WWW-Authenticate": 'Basic realm="Huiyan Guard"'},
+            )
+        if request.method in {"POST", "PUT", "PATCH", "DELETE"} and (
+            request.url.path.startswith("/api/")
+        ):
+            client_key = request.client.host if request.client else "unknown"
+            allowed, retry_after = await request.app.state.write_rate_limiter.allow(
+                client_key
+            )
+            if not allowed:
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "操作过于频繁，请稍后重试"},
+                    headers={"Retry-After": str(retry_after)},
+                )
+        return await call_next(request)
     application.mount(
         "/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets"
     )

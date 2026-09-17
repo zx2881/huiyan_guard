@@ -119,7 +119,11 @@ def test_full_workflow_saves_risk_advice_and_regulation_snapshots(
     assert detail["status"] == "completed"
     assert detail["current_step"] == "completed"
     assert detail["progress"] == 100
-    assert detail["model_info"] == {"vision_provider": "test", "text_mode": "rules"}
+    assert detail["model_info"] == {
+        "vision_provider": "test",
+        "text_mode": "rules",
+        "ai_review": "disabled",
+    }
     assert len(detail["hazards"]) == 1
     hazard = detail["hazards"][0]
     assert hazard["risk"] == "medium"

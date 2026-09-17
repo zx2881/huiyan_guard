@@ -1,12 +1,13 @@
 const root = document.getElementById("report");
 const id = new URLSearchParams(location.search).get("id");
-const activeSteps = new Set(["queued", "perceiving", "retrieving", "classifying", "remediating"]);
+const activeSteps = new Set(["queued", "perceiving", "retrieving", "classifying", "remediating", "reviewing"]);
 const stepLabels = {
   queued: "等待分析",
   perceiving: "视觉识别",
   retrieving: "检索规章",
   classifying: "风险分级",
   remediating: "生成整改建议",
+  reviewing: "内部复核",
   completed: "分析完成",
   failed: "分析失败",
 };
@@ -355,6 +356,34 @@ function metaStrip(data) {
   return meta;
 }
 
+function renderAiReview(data) {
+  if (!data.review_status || data.review_status === "disabled") return null;
+  const labels = {
+    not_required: "无需复核",
+    passed: "复核通过",
+    revised_passed: "修正后通过",
+    manual_required: "转人工复核",
+    error_manual_required: "复核异常，转人工",
+  };
+  const passed = new Set(["not_required", "passed", "revised_passed"]);
+  const section = element("section", undefined, passed.has(data.review_status) ? "empty-state" : "notice-state");
+  section.append(
+    element("h3", `内部复核：${labels[data.review_status] || data.review_status}`),
+    element("p", data.review_summary || "没有复核说明。"),
+    element("p", `复核次数 ${data.review_attempts || 0}，自动重做 ${data.review_redo_count || 0} 次。`, "small muted"),
+  );
+  const findings = Array.isArray(data.review_findings) ? data.review_findings : [];
+  if (findings.length) {
+    const areas = {evidence: "照片证据", regulation: "法规适用", risk: "风险分级", advice: "整改建议"};
+    const list = element("ul");
+    findings.forEach(finding => {
+      list.append(element("li", `第 ${finding.attempt || 1} 次：${areas[finding.area] || finding.area}，${finding.message}`));
+    });
+    section.append(list);
+  }
+  return section;
+}
+
 function renderCompleted(data) {
   const {heading, actions} = reportHeading(data, "巡检结果");
   const print = element("button", "打印报告", "button-secondary");
@@ -389,7 +418,11 @@ function renderCompleted(data) {
   const list = element("div", undefined, "hazard-list");
   if (hazards.length) hazards.forEach(hazard => list.append(renderHazard(hazard)));
   else list.append(element("p", "当前照片可见范围内未发现明确隐患，可继续现场核查或人工补录。", "empty-state"));
-  root.replaceChildren(heading, metaStrip(data), overview, sectionHeading, manualForm, list);
+  const review = renderAiReview(data);
+  const content = [heading, metaStrip(data)];
+  if (review) content.push(review);
+  content.push(overview, sectionHeading, manualForm, list);
+  root.replaceChildren(...content);
 }
 
 async function loadReport() {
