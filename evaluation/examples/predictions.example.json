@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "dataset_name": "format-example-only",
+  "generated_at": "2026-09-17T00:00:00+00:00",
+  "model": {"vision_provider": "example", "model": "not-a-real-model"},
+  "records": [
+    {
+      "sample_id": "example-01",
+      "status": "completed",
+      "duration_ms": 1000,
+      "hazards": ["安全出口堵塞"],
+      "uncertain_items": [],
+      "error_category": null
+    },
+    {
+      "sample_id": "example-02",
+      "status": "completed",
+      "duration_ms": 1200,
+      "hazards": ["插线板被覆盖"],
+      "uncertain_items": ["插座区域被遮挡"],
+      "error_category": null
+    },
+    {
+      "sample_id": "example-03",
+      "status": "completed",
+      "duration_ms": 2000,
+      "hazards": ["插线板被覆盖"],
+      "uncertain_items": [],
+      "error_category": null
+    },
+    {
+      "sample_id": "example-04",
+      "status": "failed",
+      "duration_ms": 3000,
+      "hazards": [],
+      "uncertain_items": [],
+      "error_category": "timeout"
+    }
+  ]
+}

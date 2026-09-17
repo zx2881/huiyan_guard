@@ -37,3 +37,5 @@ def test_history_and_report_use_safe_dom_and_print_styles():
     assert "window.print()" in report_script
     assert "内部复核" in report_script
     assert '"reviewing"' in report_script
+    assert "离线历史回放" in report_script
+    assert "不能作为实时识别或准确率证明" in report_script

@@ -238,7 +238,7 @@ function renderHazard(hazard) {
     element("h3", hazard.name || "未命名隐患"),
     badge(riskLabel(hazard.risk), hazard.risk === "high" ? "badge-danger" : hazard.risk === "medium" ? "badge-warning" : ""),
     badge(reviewLabel(hazard.human_status), reviewBadgeClass(hazard.human_status)),
-    badge(hazard.source === "manual" ? "人工补录" : "AI 识别"),
+    badge(hazard.source === "manual" ? "人工补录" : hazard.source === "replay" ? "历史回放" : "AI 识别"),
   );
   const fields = element("div", undefined, "hazard-fields");
   fields.append(
@@ -272,6 +272,7 @@ function renderHazard(hazard) {
     original.append(element("summary", "查看 AI 原始结论"), originalFields);
     section.append(original);
   }
+  if (hazard.source === "replay") return section;
   const review = element("div", undefined, "review-actions no-print");
   const actions = element("div", undefined, "button-row");
   const confirm = element("button", "确认无误");
@@ -347,7 +348,7 @@ function createManualForm(inspectionId) {
 
 function metaStrip(data) {
   const meta = element("dl", undefined, "meta-strip");
-  const provider = data.mode === "demo" ? "演示模式" : (data.model_info?.vision_provider || "视觉模型").toUpperCase();
+  const provider = data.mode === "demo" ? "演示模式" : data.mode === "replay" ? "离线历史回放" : (data.model_info?.vision_provider || "视觉模型").toUpperCase();
   [["检查场景", data.scene === "dormitory" ? "学生宿舍" : "实验室"], ["图片质量", qualityLabel(data.image_quality)], ["分析耗时", durationLabel(data.started_at, data.completed_at)], ["识别来源", provider]].forEach(([label, value]) => {
     const item = element("div");
     item.append(element("dt", label), element("dd", value));
@@ -411,17 +412,25 @@ function renderCompleted(data) {
   const hazards = Array.isArray(data.hazards) ? data.hazards : [];
   const sectionHeading = element("div", undefined, "section-heading");
   sectionHeading.append(element("h2", `隐患与复核（${hazards.length}）`));
-  const add = element("button", "人工补录隐患", "button-secondary no-print");
-  sectionHeading.append(add);
-  const manualForm = createManualForm(data.id);
-  add.addEventListener("click", () => { manualForm.hidden = !manualForm.hidden; });
+  let manualForm = null;
+  if (data.mode !== "replay") {
+    const add = element("button", "人工补录隐患", "button-secondary no-print");
+    sectionHeading.append(add);
+    manualForm = createManualForm(data.id);
+    add.addEventListener("click", () => { manualForm.hidden = !manualForm.hidden; });
+  }
   const list = element("div", undefined, "hazard-list");
   if (hazards.length) hazards.forEach(hazard => list.append(renderHazard(hazard)));
   else list.append(element("p", "当前照片可见范围内未发现明确隐患，可继续现场核查或人工补录。", "empty-state"));
   const review = renderAiReview(data);
   const content = [heading, metaStrip(data)];
+  if (data.mode === "replay") {
+    content.push(element("p", "这是预置的离线历史回放，使用合成示意图，不会调用模型，也不能作为实时识别或准确率证明。", "notice-state replay-notice"));
+  }
   if (review) content.push(review);
-  content.push(overview, sectionHeading, manualForm, list);
+  content.push(overview, sectionHeading);
+  if (manualForm) content.push(manualForm);
+  content.push(list);
   root.replaceChildren(...content);
 }
 

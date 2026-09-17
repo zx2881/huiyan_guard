@@ -14,6 +14,9 @@ def test_container_runs_single_process_as_non_root_and_excludes_private_inputs()
     assert "data" in dockerignore
     assert "赛事资料" in dockerignore
     assert "samples" in dockerignore
+    assert "evaluation/images" in dockerignore
+    assert "evaluation/results" in dockerignore
+    assert "evaluation/dataset.json" in dockerignore
 
 
 def test_compose_requires_access_control_and_persists_data():

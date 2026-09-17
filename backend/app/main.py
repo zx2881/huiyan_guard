@@ -231,6 +231,11 @@ def update_hazard(request: Request, hazard_id: int, payload: HazardUpdate):
         ).fetchone()
         if not before:
             raise HTTPException(404, "隐患记录不存在")
+        inspection = database.execute(
+            "SELECT mode FROM inspections WHERE id=?", (before["inspection_id"],)
+        ).fetchone()
+        if inspection and inspection["mode"] == "replay":
+            raise HTTPException(409, "离线历史回放为只读记录")
         if values.get("manual_checks") is not None:
             values["manual_checks"] = json.dumps(
                 values["manual_checks"], ensure_ascii=False
@@ -288,10 +293,12 @@ def create_manual_hazard(
     now = datetime.now(timezone.utc).isoformat()
     with conn(settings) as database:
         inspection = database.execute(
-            "SELECT status FROM inspections WHERE id=?", (inspection_id,)
+            "SELECT status,mode FROM inspections WHERE id=?", (inspection_id,)
         ).fetchone()
         if not inspection:
             raise HTTPException(404, "巡检记录不存在")
+        if inspection["mode"] == "replay":
+            raise HTTPException(409, "离线历史回放为只读记录")
         if inspection["status"] != "completed":
             raise HTTPException(409, "分析完成后才能补录隐患")
         hazard_id = database.execute(
@@ -406,13 +413,18 @@ def _json_list(value) -> list:
 
 def dashboard(request: Request):
     with conn(_settings(request)) as database:
-        total = database.execute("SELECT COUNT(*) n FROM inspections").fetchone()["n"]
+        total = database.execute(
+            "SELECT COUNT(*) n FROM inspections WHERE mode!='replay'"
+        ).fetchone()["n"]
         hazards = database.execute(
-            "SELECT COUNT(*) n FROM hazards WHERE human_status!='rejected'"
+            "SELECT COUNT(*) n FROM hazards h JOIN inspections i "
+            "ON i.id=h.inspection_id WHERE h.human_status!='rejected' "
+            "AND i.mode!='replay'"
         ).fetchone()["n"]
         risks = database.execute(
-            "SELECT risk,COUNT(*) n FROM hazards "
-            "WHERE human_status!='rejected' GROUP BY risk"
+            "SELECT h.risk,COUNT(*) n FROM hazards h JOIN inspections i "
+            "ON i.id=h.inspection_id WHERE h.human_status!='rejected' "
+            "AND i.mode!='replay' GROUP BY h.risk"
         ).fetchall()
     return {
         "total_inspections": total,
@@ -444,7 +456,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
-    application = FastAPI(title="慧眼安巡", version="0.7.0", lifespan=lifespan)
+    application = FastAPI(title="慧眼安巡", version="0.8.0", lifespan=lifespan)
     application.state.settings = resolved_settings
     application.state.frontend_dir = FRONTEND_DIR
     application.state.write_rate_limiter = WriteRateLimiter(

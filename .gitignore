@@ -10,6 +10,9 @@ data/chroma/
 data/uploads/
 data/logs/
 backups/
+evaluation/dataset.json
+evaluation/images/
+evaluation/results/
 
 # Local competition materials and audit attachments are not published.
 赛事资料/

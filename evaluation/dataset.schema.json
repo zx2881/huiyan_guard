@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://huiyan-guard.local/schemas/evaluation-dataset-v1.json",
+  "title": "慧眼安巡人工标注评测集",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "name", "is_example", "samples"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "name": {"type": "string", "minLength": 1},
+    "description": {"type": "string"},
+    "is_example": {"type": "boolean"},
+    "label_aliases": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "minLength": 1}
+    },
+    "samples": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "split", "scene", "image_path", "source", "annotations"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "split": {"enum": ["smoke", "validation"]},
+          "scene": {"enum": ["dormitory", "laboratory"]},
+          "image_path": {"type": "string", "minLength": 1},
+          "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "usage_permission"],
+            "properties": {
+              "kind": {"type": "string", "minLength": 1},
+              "usage_permission": {"type": "string", "minLength": 1},
+              "notes": {"type": "string"}
+            }
+          },
+          "annotations": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["hazards", "uncertain_items"],
+            "properties": {
+              "hazards": {"type": "array", "items": {"type": "string", "minLength": 1}},
+              "uncertain_items": {"type": "array", "items": {"type": "string", "minLength": 1}}
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "name": "format-example-only",
+  "description": "仅用于验证评测格式和指标计算，不包含真实图片或真实模型结论。",
+  "is_example": true,
+  "label_aliases": {
+    "安全出口堵塞": "疏散通道堵塞"
+  },
+  "samples": [
+    {
+      "id": "example-01",
+      "split": "smoke",
+      "scene": "dormitory",
+      "image_path": "images/example-01.jpg",
+      "source": {"kind": "synthetic_example", "usage_permission": "仅用于仓库格式示例"},
+      "annotations": {"hazards": ["疏散通道堵塞"], "uncertain_items": []}
+    },
+    {
+      "id": "example-02",
+      "split": "smoke",
+      "scene": "dormitory",
+      "image_path": "images/example-02.jpg",
+      "source": {"kind": "synthetic_example", "usage_permission": "仅用于仓库格式示例"},
+      "annotations": {"hazards": [], "uncertain_items": ["插座区域被遮挡"]}
+    },
+    {
+      "id": "example-03",
+      "split": "validation",
+      "scene": "dormitory",
+      "image_path": "images/example-03.jpg",
+      "source": {"kind": "synthetic_example", "usage_permission": "仅用于仓库格式示例"},
+      "annotations": {"hazards": ["插线板被覆盖", "线路凌乱"], "uncertain_items": []}
+    },
+    {
+      "id": "example-04",
+      "split": "validation",
+      "scene": "dormitory",
+      "image_path": "images/example-04.jpg",
+      "source": {"kind": "synthetic_example", "usage_permission": "仅用于仓库格式示例"},
+      "annotations": {"hazards": ["宿舍内使用明火"], "uncertain_items": []}
+    }
+  ]
+}

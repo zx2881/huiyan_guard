@@ -38,6 +38,7 @@ function render() {
     const title = element("h2", `#${record.id} ${record.scene === "dormitory" ? "学生宿舍" : "实验室"}`);
     const [label, badgeClass] = statusInfo(record.status);
     title.append(document.createTextNode(" "), element("span", label, `badge ${badgeClass}`));
+    if (record.mode === "replay") title.append(document.createTextNode(" "), element("span", "离线回放", "badge badge-warning"));
     main.append(title, element("p", record.summary || "暂无分析摘要", "muted"), element("p", new Date(record.created_at).toLocaleString("zh-CN"), "small muted"));
     const link = element("a", active.has(record.status) ? "查看进度" : "查看报告", "button-link button-secondary");
     link.href = `/report?id=${encodeURIComponent(record.id)}`;

@@ -57,6 +57,7 @@
 
 - `mode=demo`：视觉提供方不能执行真实推理时返回 HTTP 200 和 `completed`，不创建占位隐患。
 - `mode=vision`：返回 HTTP 202 和 `queued`，后台执行视觉识别、条款检索、分级及建议。
+- `mode=replay`：只存在于 `scripts/seed_demo.py` 生成的离线历史报告，不由创建接口返回，也不代表实时分析。回放记录为只读；修改隐患或补录隐患返回 HTTP 409，仪表盘统计排除这类记录。
 
 上传校验错误仍直接返回 400/413。任务创建成功后的视觉、文本或工作流错误写入巡检的 `failed` 状态和安全错误字段，由详情接口读取。
 
@@ -78,7 +79,7 @@
 | `image_quality` | string/null | `good`、`poor`、`uncertain` 或旧记录空值 |
 | `uncertain_items` | array | 无法仅从照片确认的项目 |
 | `summary` | string/null | 当前照片可见范围的总结或演示提示 |
-| `mode` | string | `vision`、`demo` 或旧记录 `unknown` |
+| `mode` | string | `vision`、`demo`、离线历史 `replay` 或旧记录 `unknown` |
 | `model_info` | object/null | 视觉提供方与文本处理模式，不包含密钥 |
 | `retry_count` | integer | 已发起重试次数 |
 | `review_status` | string | `disabled`、`not_required`、`passed`、`revised_passed`、`manual_required` 或 `error_manual_required` |
